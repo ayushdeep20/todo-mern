@@ -2,151 +2,173 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 
+// Change ONLY this if you change backend URL
 axios.defaults.baseURL = "https://todo-mern-8685.onrender.com/api";
 
 export default function App() {
-  const [weeklyData, setWeeklyData] = useState({});
-  const [openWeek, setOpenWeek] = useState(null);
-
+  const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [priority, setPriority] = useState("");
 
   useEffect(() => {
-    fetchWeekly();
+    fetchTasks();
   }, []);
 
-  const fetchWeekly = async () => {
+  const fetchTasks = async () => {
     try {
-      const res = await axios.get("/weekly-summary");
-      setWeeklyData(res.data);
+      const res = await axios.get("/tasks");
+      setTasks(res.data);
     } catch (err) {
-      console.log("Fetch summary failed:", err);
+      console.log("Could not fetch tasks:", err);
     }
   };
 
   const addTask = async () => {
-    if (!title || !date || !time) return alert("Title, Date & Time required");
+    if (!title || !date || !time) return alert("Title, Date, and Time are required");
 
-    await axios.post("/tasks", {
-      title,
-      description,
-      dateTime: new Date(`${date}T${time}`),
-      status: "in-progress"
-    });
+    try {
+      await axios.post("/tasks", {
+        title,
+        description,
+        priority,
+        dateTime: new Date(`${date}T${time}`),
+        status: "in-progress"
+      });
 
-    setTitle("");
-    setDescription("");
-    setDate("");
-    setTime("");
+      setTitle("");
+      setDescription("");
+      setDate("");
+      setTime("");
+      setPriority("");
 
-    fetchWeekly();
-  };
-
-  const toggleComplete = async (id, current) => {
-    await axios.put(`/tasks/${id}`, {
-      status: current === "completed" ? "in-progress" : "completed"
-    });
-    fetchWeekly();
+      fetchTasks();
+    } catch (err) {
+      console.log("Error adding task:", err);
+    }
   };
 
   const deleteTask = async (id) => {
-    await axios.delete(`/tasks/${id}`);
-    fetchWeekly();
+    try {
+      await axios.delete(`/tasks/${id}`);
+      fetchTasks();
+    } catch (err) {
+      console.log("Error deleting task:", err);
+    }
+  };
+
+  const toggleComplete = async (id, status) => {
+    try {
+      await axios.put(`/tasks/${id}`, { status: status === "completed" ? "in-progress" : "completed" });
+      fetchTasks();
+    } catch (err) {
+      console.log("Error updating status:", err);
+    }
   };
 
   return (
-    <div className="p-5 max-w-md mx-auto font-sans">
-      {/* HEADER */}
-      <h1 className="text-2xl font-semibold mb-4">Weekly Tasks</h1>
+    <div className="p-6 max-w-md mx-auto font-sans">
+      <h1 className="text-3xl font-bold mb-4 text-center">To-Do Manager</h1>
 
-      {/* ADD TASK FORM */}
-      <div className="mb-6 space-y-3">
-        <input className="w-full border p-2 rounded" placeholder="Task Title"
-          value={title} onChange={(e) => setTitle(e.target.value)} />
+      <div className="space-y-3">
+        <input
+          className="w-full border p-2 rounded"
+          placeholder="Task Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
 
-        <textarea className="w-full border p-2 rounded" placeholder="Description (optional)"
-          value={description} onChange={(e) => setDescription(e.target.value)} />
+        <textarea
+          className="w-full border p-2 rounded"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
 
-        <input type="date" className="w-full border p-2 rounded"
-          value={date} onChange={(e) => setDate(e.target.value)} />
+        <select
+          className="w-full border p-2 rounded"
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+        >
+          <option value="">Priority (optional)</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
 
-        <input type="time" className="w-full border p-2 rounded"
-          value={time} onChange={(e) => setTime(e.target.value)} />
+        <input
+          type="date"
+          className="w-full border p-2 rounded"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
 
-        <button className="w-full bg-blue-600 text-white p-2 rounded"
-          onClick={addTask}>
+        <input
+          type="time"
+          className="w-full border p-2 rounded"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+        />
+
+        <button className="w-full bg-blue-600 text-white p-2 rounded" onClick={addTask}>
           Add Task
         </button>
       </div>
 
-      {/* WEEKLY SUMMARY CARDS */}
-      {Object.keys(weeklyData).length === 0 && (
-        <p className="text-gray-500">No tasks yet.</p>
-      )}
+      <h2 className="text-xl font-semibold mt-6 mb-3">Tasks</h2>
 
-      <div className="space-y-4">
-        {Object.entries(weeklyData).map(([week, data]) => {
-          const start = dayjs(week);
-          const end = start.add(6, "day");
+      {tasks.length === 0 && <p className="text-gray-500">No tasks yet.</p>}
 
-          return (
-            <div key={week}>
-
-              {/* WEEK CARD */}
-              <div
-                className="bg-white shadow rounded-2xl p-4 cursor-pointer border"
-                onClick={() => setOpenWeek(openWeek === week ? null : week)}
+      <ul className="space-y-3">
+        {tasks.map((task) => (
+          <li key={task._id} className="border p-3 rounded flex justify-between items-center">
+            <div>
+              <p
+                className={`text-lg ${
+                  task.status === "completed" ? "line-through text-gray-400" : ""
+                }`}
               >
-                <p className="font-semibold">
-                  {start.format("MMM D")} → {end.format("MMM D")}
-                </p>
+                {task.title}
+              </p>
 
-                <p className="text-sm mt-1">
-                  🔵 {data.open} Open &nbsp;&nbsp; ✅ {data.completed} Done
-                </p>
-              </div>
+              <p className="text-sm text-gray-500">
+                {dayjs(task.dateTime).format("MMM D, YYYY h:mm A")}
+              </p>
 
-              {/* TASK LIST (only if this week is expanded) */}
-              {openWeek === week && (
-                <ul className="mt-3 space-y-3 pl-2">
-                  {data.tasks.map(task => (
-                    <li key={task._id}
-                      className="border rounded-xl p-3 flex justify-between items-center">
-                      <div>
-                        <p className={task.status === "completed" ? "line-through text-gray-400" : ""}>
-                          {task.title}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {dayjs(task.dateTime).format("MMM D, h:mm A")}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <button
-                          className="text-green-600 font-bold"
-                          onClick={() => toggleComplete(task._id, task.status)}
-                        >
-                          ✓
-                        </button>
-
-                        <button
-                          className="text-red-600 font-bold"
-                          onClick={() => deleteTask(task._id)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              {task.priority && (
+                <span
+                  className={`text-xs px-2 py-1 rounded mt-1 inline-block ${
+                    task.priority === "high"
+                      ? "bg-red-200 text-red-700"
+                      : task.priority === "medium"
+                      ? "bg-yellow-200 text-yellow-700"
+                      : "bg-green-200 text-green-700"
+                  }`}
+                >
+                  {task.priority}
+                </span>
               )}
-
             </div>
-          );
-        })}
-      </div>
+
+            <div className="flex gap-3">
+              <button
+                className="text-green-600 text-xl"
+                onClick={() => toggleComplete(task._id, task.status)}
+              >
+                ✓
+              </button>
+              <button
+                className="text-red-600 text-xl"
+                onClick={() => deleteTask(task._id)}
+              >
+                ✕
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
