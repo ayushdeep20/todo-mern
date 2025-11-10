@@ -2,116 +2,141 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 
-const API = import.meta.env.VITE_API || "http://localhost:4000/api";
+axios.defaults.baseURL = "https://todo-mern-8685.onrender.com/api";
 
-function App() {
+export default function App() {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
-  const [dateTime, setDateTime] = useState("");
-  const [priority, setPriority] = useState("Low");
-  const [refresh, setRefresh] = useState(false);
 
+  // Load tasks on start
   useEffect(() => {
-    axios.get(`${API}/tasks`)
-      .then(res => setTasks(res.data))
-      .catch(() => setTasks([]));
-  }, [refresh]);
+    fetchTasks();
+  }, []);
 
-  const addTask = async () => {
-    if (!title || !dateTime) return alert("Title and Date/Time required");
-    await axios.post(`${API}/tasks`, { title, description, dateTime, priority });
-    setTitle("");
-    setDescription("");
-    setDateTime("");
-    setPriority("Low");
-    setRefresh(!refresh);
+  const fetchTasks = async () => {
+    try {
+      const res = await axios.get("/tasks");
+      setTasks(res.data);
+    } catch (err) {
+      console.log("Could not fetch tasks:", err);
+    }
   };
 
-  const toggleStatus = async (id, current) => {
-    const status = current === "completed" ? "open" : "completed";
-    await axios.put(`${API}/tasks/${id}`, { status });
-    setRefresh(!refresh);
+  const addTask = async () => {
+    if (!title || !date || !time) return alert("Title, Date and Time are required");
+
+    try {
+      await axios.post("/tasks", {
+        title,
+        description,
+        dateTime: `${date} ${time}`,
+      });
+
+      setTitle("");
+      setDate("");
+      setTime("");
+      setDescription("");
+
+      fetchTasks();
+    } catch (err) {
+      console.log("Error adding task:", err);
+    }
   };
 
   const deleteTask = async (id) => {
-    await axios.delete(`${API}/tasks/${id}`);
-    setRefresh(!refresh);
+    try {
+      await axios.delete(`/tasks/${id}`);
+      fetchTasks();
+    } catch (err) {
+      console.log("Error deleting:", err);
+    }
+  };
+
+  const toggleComplete = async (id, currentStatus) => {
+    try {
+      await axios.put(`/tasks/${id}`, { completed: !currentStatus });
+      fetchTasks();
+    } catch (err) {
+      console.log("Error updating:", err);
+    }
   };
 
   return (
-    <div className="min-h-screen p-4 max-w-md mx-auto">
-      <h1 className="text-3xl font-bold text-center mb-6">My To-Do List</h1>
+    <div className="p-5 max-w-md mx-auto">
+      <h1 className="text-2xl font-semibold mb-4">To-Do App</h1>
 
-      <div className="bg-white rounded-2xl shadow p-4 mb-6">
+      <div className="space-y-3">
         <input
-          type="text"
-          placeholder="Task title"
+          className="w-full border p-2 rounded"
+          placeholder="Task Title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="border rounded w-full p-2 mb-2"
         />
+
         <textarea
-          placeholder="Description"
+          className="w-full border p-2 rounded"
+          placeholder="Description (optional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="border rounded w-full p-2 mb-2"
         />
+
         <input
-          type="datetime-local"
-          value={dateTime}
-          onChange={(e) => setDateTime(e.target.value)}
-          className="border rounded w-full p-2 mb-2"
+          className="w-full border p-2 rounded"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
         />
-        <select
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-          className="border rounded w-full p-2 mb-2"
-        >
-          <option>Low</option>
-          <option>Medium</option>
-          <option>High</option>
-        </select>
+
+        <input
+          className="w-full border p-2 rounded"
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+        />
 
         <button
+          className="w-full bg-blue-600 text-white p-2 rounded"
           onClick={addTask}
-          className="bg-blue-600 text-white w-full py-2 rounded hover:bg-blue-700"
         >
           Add Task
         </button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-3">Your Tasks</h2>
-      <div className="space-y-3">
-        {tasks.length === 0 && (
-          <p className="text-gray-500 text-center">No tasks yet</p>
-        )}
-        {tasks.map(t => (
-          <div key={t._id} className="bg-white shadow rounded-xl p-4 flex justify-between items-center">
+      <h2 className="text-xl font-semibold mt-6 mb-3">Tasks</h2>
+
+      {tasks.length === 0 && <p className="text-gray-500">No tasks yet.</p>}
+
+      <ul className="space-y-3">
+        {tasks.map((task) => (
+          <li key={task._id} className="border p-3 rounded flex justify-between">
             <div>
-              <h3 className={`font-semibold ${t.status === "completed" ? "line-through text-gray-400" : ""}`}>{t.title}</h3>
-              <p className="text-sm text-gray-500">{dayjs(t.dateTime).format("ddd, MMM D hh:mm A")}</p>
-              <p className="text-xs text-gray-400">Priority: {t.priority}</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => toggleStatus(t._id, t.status)}
-                className={`px-3 py-1 rounded text-white ${t.status === "completed" ? "bg-yellow-500" : "bg-green-500"}`}
+              <p
+                className={`text-lg ${task.completed ? "line-through text-gray-400" : ""}`}
               >
-                {t.status === "completed" ? "Undo" : "Done"}
-              </button>
+                {task.title}
+              </p>
+              <p className="text-sm text-gray-500">
+                {dayjs(task.dateTime).format("MMM D, YYYY h:mm A")}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
               <button
-                onClick={() => deleteTask(t._id)}
-                className="px-3 py-1 bg-red-600 text-white rounded"
+                className="text-green-600"
+                onClick={() => toggleComplete(task._id, task.completed)}
               >
-                X
+                ✓
+              </button>
+              <button className="text-red-600" onClick={() => deleteTask(task._id)}>
+                ✕
               </button>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
-
-export default App;
