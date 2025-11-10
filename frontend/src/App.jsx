@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 
+// ✅ Backend API URL (Render Backend)
 axios.defaults.baseURL = "https://todo-mern-8685.onrender.com/api";
 
 export default function App() {
@@ -11,7 +12,7 @@ export default function App() {
   const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
 
-  // Load tasks on start
+  // Load tasks when page loads
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -33,13 +34,13 @@ export default function App() {
         title,
         description,
         dateTime: `${date} ${time}`,
+        status: "open",
       });
 
       setTitle("");
       setDate("");
       setTime("");
       setDescription("");
-
       fetchTasks();
     } catch (err) {
       console.log("Error adding task:", err);
@@ -57,7 +58,9 @@ export default function App() {
 
   const toggleComplete = async (id, currentStatus) => {
     try {
-      await axios.put(`/tasks/${id}`, { completed: !currentStatus });
+      await axios.put(`/tasks/${id}`, {
+        status: currentStatus === "completed" ? "open" : "completed",
+      });
       fetchTasks();
     } catch (err) {
       console.log("Error updating:", err);
@@ -114,7 +117,9 @@ export default function App() {
           <li key={task._id} className="border p-3 rounded flex justify-between">
             <div>
               <p
-                className={`text-lg ${task.completed ? "line-through text-gray-400" : ""}`}
+                className={`text-lg ${
+                  task.status === "completed" ? "line-through text-gray-400" : ""
+                }`}
               >
                 {task.title}
               </p>
@@ -126,11 +131,14 @@ export default function App() {
             <div className="flex gap-3">
               <button
                 className="text-green-600"
-                onClick={() => toggleComplete(task._id, task.completed)}
+                onClick={() => toggleComplete(task._id, task.status)}
               >
                 ✓
               </button>
-              <button className="text-red-600" onClick={() => deleteTask(task._id)}>
+              <button
+                className="text-red-600"
+                onClick={() => deleteTask(task._id)}
+              >
                 ✕
               </button>
             </div>
