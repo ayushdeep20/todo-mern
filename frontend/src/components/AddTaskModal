@@ -1,0 +1,75 @@
+// frontend/src/components/AddTaskModal.jsx
+import React from "react";
+
+export default function AddTaskModal({
+  show,
+  onClose,
+  title,
+  setTitle,
+  description,
+  setDescription,
+  date,
+  setDate,
+  time,
+  setTime,
+  addTask,
+}) {
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex justify-center items-end z-50">
+      <div className="bg-white rounded-t-2xl p-5 w-full max-w-sm">
+        {/* drag handle */}
+        <div className="h-1 w-10 bg-gray-300 rounded mx-auto mb-4" />
+        <h2 className="text-lg font-semibold mb-4 text-center">Add Task</h2>
+
+        <input
+          className="w-full border p-2 rounded mb-3"
+          placeholder="Task Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+
+        <textarea
+          className="w-full border p-2 rounded mb-3"
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+
+        <div className="flex gap-3 mb-3">
+          <input
+            type="date"
+            className="w-1/2 border p-2 rounded"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <input
+            type="time"
+            className="w-1/2 border p-2 rounded"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+        </div>
+
+        <button
+          className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
+          onClick={() => {
+            addTask();
+            onClose();
+          }}
+        >
+          Add
+        </button>
+
+        <button
+          className="w-full text-center text-gray-500 text-sm"
+          onClick={onClose}
+          type="button"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
