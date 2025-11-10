@@ -4,7 +4,16 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://todomernlast.netlify.app",  // your deployed frontend
+    "http://localhost:5173"              // so local doesn’t break again
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
+
+
 app.use(express.json());
 
 const Task = require('./models/task');
