@@ -80,27 +80,30 @@ function AddTaskModal({
 /* ---- End inline modal ---- */
 
 export default function App() {
-  const [tasks, setTasks] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
+  // weekly summary object: { "YYYY-MM-DD(monday)": { open, completed, tasks: [...] } }
+  const [weekly, setWeekly] = useState({});
+  const [openWeek, setOpenWeek] = useState(null);
 
-  // form state for AddTaskModal
+  // form / modal
+  const [showAddModal, setShowAddModal] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
 
+  // search within expanded week
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetchTasks();
+    fetchWeekly();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchWeekly = async () => {
     try {
-      const res = await axios.get("/tasks");
-      setTasks(res.data || []);
+      const res = await axios.get("/weekly-summary");
+      setWeekly(res.data || {});
     } catch (err) {
-      console.log("Fetch error:", err?.response?.data || err.message);
+      console.log("Fetch weekly failed:", err?.response?.data || err.message);
     }
   };
 
@@ -116,15 +119,13 @@ export default function App() {
         status: "in-progress",
         dateTime: new Date(`${date}T${time}`),
       });
-
-      // clear form
+      // clear
       setTitle("");
       setDescription("");
       setDate("");
       setTime("");
-
-      // refresh
-      fetchTasks();
+      // refresh weekly view
+      fetchWeekly();
     } catch (err) {
       console.log("Add error:", err?.response?.data || err.message);
     }
@@ -135,7 +136,7 @@ export default function App() {
       await axios.put(`/tasks/${id}`, {
         status: status === "completed" ? "in-progress" : "completed",
       });
-      fetchTasks();
+      fetchWeekly();
     } catch (err) {
       console.log("Update error:", err?.response?.data || err.message);
     }
@@ -144,139 +145,148 @@ export default function App() {
   const deleteTask = async (id) => {
     try {
       await axios.delete(`/tasks/${id}`);
-      fetchTasks();
+      fetchWeekly();
     } catch (err) {
       console.log("Delete error:", err?.response?.data || err.message);
     }
   };
 
-  // derived UI numbers
-  const completedCount = useMemo(
-    () => tasks.filter((t) => t.status === "completed").length,
-    [tasks]
-  );
-  const pendingCount = useMemo(
-    () => tasks.length - completedCount,
-    [tasks, completedCount]
-  );
-
-  // simple "today" filter without extra plugins
-  const todayKey = dayjs().format("YYYY-MM-DD");
-  const tasksToday = useMemo(
+  const weekKeys = useMemo(
     () =>
-      tasks
-        .filter((t) => dayjs(t.dateTime).format("YYYY-MM-DD") === todayKey)
-        .filter((t) =>
-          search.trim()
-            ? (t.title || "").toLowerCase().includes(search.toLowerCase()) ||
-              (t.description || "").toLowerCase().includes(search.toLowerCase())
-            : true
-        ),
-    [tasks, todayKey, search]
+      Object.keys(weekly)
+        .sort((a, b) => new Date(b) - new Date(a)), // latest week first
+    [weekly]
   );
 
   return (
     <div className="min-h-screen bg-white px-4 pt-6 pb-28 font-sans max-w-sm mx-auto">
-      {/* Search */}
+      {/* Search (filters tasks inside expanded week) */}
       <input
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search for a task"
+        placeholder="Search tasks in this week"
         className="w-full bg-gray-100 px-4 py-2 rounded-lg mb-6 text-sm outline-none"
       />
 
-      {/* Weekday strip (highlight today) */}
-      <div className="flex justify-between text-center text-xs text-gray-600 mb-6">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => {
-          const jsDay = (dayjs().day() + 6) % 7; // Monday=0
+      {/* Header */}
+      <h1 className="text-xl font-semibold mb-3">Weekly Overview</h1>
+
+      {/* If no data */}
+      {weekKeys.length === 0 && (
+        <p className="text-gray-400 text-sm">No tasks yet. Add one with the + button.</p>
+      )}
+
+      {/* Weekly cards */}
+      <div className="space-y-4">
+        {weekKeys.map((week) => {
+          const data = weekly[week];
+          const start = dayjs(week);
+          const end = start.add(6, "day");
+
+          // filter tasks by search when expanded
+          const tasksFiltered =
+            openWeek === week && search.trim()
+              ? data.tasks.filter(
+                  (t) =>
+                    (t.title || "").toLowerCase().includes(search.toLowerCase()) ||
+                    (t.description || "")
+                      .toLowerCase()
+                      .includes(search.toLowerCase())
+                )
+              : data.tasks;
+
           return (
-            <div
-              key={d}
-              className={`w-8 py-1 rounded-md ${
-                i === jsDay ? "bg-blue-600 text-white font-medium" : "bg-gray-100"
-              }`}
-            >
-              {d}
+            <div key={week}>
+              {/* Week card */}
+              <div
+                className="bg-white shadow rounded-2xl p-4 cursor-pointer border active:scale-[.995]"
+                onClick={() => setOpenWeek(openWeek === week ? null : week)}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold">
+                    {start.format("MMM D")} → {end.format("MMM D")}
+                  </p>
+                  <span className="text-xs text-gray-500">
+                    {openWeek === week ? "Hide" : "Show"}
+                  </span>
+                </div>
+
+                <p className="text-sm mt-2">
+                  🔵 {data.open} Open &nbsp;&nbsp; ✅ {data.completed} Done
+                </p>
+
+                {/* progress bar */}
+                <div className="mt-3 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all"
+                    style={{
+                      width:
+                        data.open + data.completed === 0
+                          ? "0%"
+                          : Math.round(
+                              (data.completed / (data.open + data.completed)) * 100
+                            ) + "%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Expanded task list */}
+              {openWeek === week && (
+                <ul className="mt-3 space-y-3 pl-1">
+                  {tasksFiltered.map((task) => (
+                    <li
+                      key={task._id}
+                      className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
+                    >
+                      <div className="pr-3">
+                        <p
+                          className={`text-sm ${
+                            task.status === "completed"
+                              ? "line-through text-gray-400"
+                              : ""
+                          }`}
+                        >
+                          {task.title}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {dayjs(task.dateTime).format("MMM D, h:mm A")}
+                        </p>
+                        {task.description && (
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            {task.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 items-center">
+                        <button
+                          className="text-green-600 text-lg"
+                          onClick={() => toggleComplete(task._id, task.status)}
+                          title="Toggle complete"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="text-red-600 text-lg"
+                          onClick={() => deleteTask(task._id)}
+                          title="Delete task"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                  {tasksFiltered.length === 0 && (
+                    <li className="text-xs text-gray-400 pl-1">No matching tasks in this week.</li>
+                  )}
+                </ul>
+              )}
             </div>
           );
         })}
       </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-indigo-100 rounded-lg p-3 text-center">
-          <p className="text-xs">Task Complete</p>
-          <p className="text-xl font-semibold">{completedCount}</p>
-          <p className="text-[10px] text-gray-500">This Week</p>
-        </div>
-        <div className="bg-red-100 rounded-lg p-3 text-center">
-          <p className="text-xs">Task Pending</p>
-          <p className="text-xl font-semibold">{pendingCount}</p>
-          <p className="text-[10px] text-gray-500">This Week</p>
-        </div>
-      </div>
-
-      {/* Weekly Progress */}
-      <div className="mb-6">
-        <p className="text-sm font-medium mb-2">Weekly Progress</p>
-        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-600 transition-all"
-            style={{
-              width:
-                tasks.length === 0
-                  ? "0%"
-                  : Math.round((completedCount / tasks.length) * 100) + "%",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Tasks Today */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium">Tasks Today</p>
-        <span className="text-xs text-gray-500">{tasksToday.length}</span>
-      </div>
-
-      {tasksToday.length === 0 && (
-        <p className="text-gray-400 text-sm mb-3">No tasks for today.</p>
-      )}
-
-      <ul className="space-y-3">
-        {tasksToday.map((task) => (
-          <li
-            key={task._id}
-            className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg"
-          >
-            <input
-              type="checkbox"
-              checked={task.status === "completed"}
-              onChange={() => toggleComplete(task._id, task.status)}
-            />
-            <div className="flex-1">
-              <p
-                className={`text-sm ${
-                  task.status === "completed" ? "line-through text-gray-400" : ""
-                }`}
-              >
-                {task.title}
-              </p>
-              <p className="text-[10px] text-gray-500">
-                {dayjs(task.dateTime).format("MMM D, h:mm A")}
-              </p>
-            </div>
-            <button
-              className="text-red-600 text-sm px-2"
-              onClick={() => deleteTask(task._id)}
-              aria-label="Delete task"
-              title="Delete"
-            >
-              ✕
-            </button>
-          </li>
-        ))}
-      </ul>
 
       {/* Floating Add Button */}
       <button
