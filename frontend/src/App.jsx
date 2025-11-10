@@ -1,169 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 
-// Backend API base (Render)
+// ---------------- API base ----------------
 axios.defaults.baseURL = "https://todo-mern-8685.onrender.com/api";
 
-/* ---------------- Bottom-sheet Add Modal ---------------- */
-function AddTaskModal({
-  show,
-  onClose,
-  title,
-  setTitle,
-  description,
-  setDescription,
-  date,
-  setDate,
-  time,
-  setTime,
-  priority,
-  setPriority,
-  addTask, // must return true on success
-}) {
-  if (!show) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex justify-center items-end z-50">
-      <div className="bg-white rounded-t-2xl p-5 w-full max-w-sm">
-        <div className="h-1 w-10 bg-gray-300 rounded mx-auto mb-4" />
-        <h2 className="text-lg font-semibold mb-4 text-center">Add Task</h2>
-
-        <input
-          className="w-full border p-2 rounded mb-3"
-          placeholder="Task Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-
-        <textarea
-          className="w-full border p-2 rounded mb-3"
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        <div className="flex gap-3 mb-3">
-          <input
-            type="date"
-            className="w-1/2 border p-2 rounded"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <input
-            type="time"
-            className="w-1/2 border p-2 rounded"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-          />
-        </div>
-
-        <select
-          className="w-full border p-2 rounded mb-4"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-        >
-          <option value="">Priority (optional)</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-
-        <button
-          className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
-          onClick={async () => {
-            const ok = await addTask();
-            if (ok) onClose();
-          }}
-        >
-          Add
-        </button>
-
-        <button
-          className="w-full text-center text-gray-500 text-sm"
-          onClick={onClose}
-          type="button"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Bottom-sheet Edit Modal ---------------- */
-function EditTaskModal({ show, onClose, editingTask, setEditingTask, onSave }) {
-  if (!show || !editingTask) return null;
-
-  const setField = (k) => (e) => setEditingTask((t) => ({ ...t, [k]: e.target.value }));
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex justify-center items-end z-50">
-      <div className="bg-white rounded-t-2xl p-5 w-full max-w-sm">
-        <div className="h-1 w-10 bg-gray-300 rounded mx-auto mb-4" />
-        <h2 className="text-lg font-semibold mb-4 text-center">Edit Task</h2>
-
-        <input
-          className="w-full border p-2 rounded mb-3"
-          placeholder="Task Title"
-          value={editingTask.title || ""}
-          onChange={setField("title")}
-        />
-
-        <textarea
-          className="w-full border p-2 rounded mb-3"
-          placeholder="Description (optional)"
-          value={editingTask.description || ""}
-          onChange={setField("description")}
-        />
-
-        <div className="flex gap-3 mb-3">
-          <input
-            type="date"
-            className="w-1/2 border p-2 rounded"
-            value={dayjs(editingTask.dateTime).format("YYYY-MM-DD")}
-            onChange={(e) => {
-              const d = e.target.value;
-              const t = dayjs(editingTask.dateTime).format("HH:mm");
-              setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
-            }}
-          />
-          <input
-            type="time"
-            className="w-1/2 border p-2 rounded"
-            value={dayjs(editingTask.dateTime).format("HH:mm")}
-            onChange={(e) => {
-              const t = e.target.value;
-              const d = dayjs(editingTask.dateTime).format("YYYY-MM-DD");
-              setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
-            }}
-          />
-        </div>
-
-        <select
-          className="w-full border p-2 rounded mb-4"
-          value={editingTask.priority || ""}
-          onChange={setField("priority")}
-        >
-          <option value="">Priority (optional)</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-
-        <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]" onClick={onSave}>
-          Save
-        </button>
-
-        <button className="w-full text-center text-gray-500 text-sm" onClick={onClose} type="button">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Helpers ---------------- */
+/* =============== Tiny helpers =============== */
 function PriorityDot({ priority }) {
   const cls =
     priority === "high"
@@ -177,28 +19,229 @@ function PriorityDot({ priority }) {
   return <span className={`inline-block w-2 h-2 rounded-full ${cls}`} aria-hidden="true" />;
 }
 
-/* ---------------- Main App ---------------- */
+function cn(...a) {
+  return a.filter(Boolean).join(" ");
+}
+
+/* =============== iOS-style Bottom Sheet (no deps) =============== */
+function BottomSheet({ show, onClose, children, title = "" }) {
+  const sheetRef = useRef(null);
+  const startY = useRef(0);
+  const currentY = useRef(0);
+  const dragging = useRef(false);
+
+  // translateY in px
+  const [ty, setTy] = useState(0);
+
+  useEffect(() => {
+    if (!show) setTy(0);
+  }, [show]);
+
+  const begin = (y) => {
+    dragging.current = true;
+    startY.current = y;
+  };
+  const move = (y) => {
+    if (!dragging.current) return;
+    const delta = Math.max(0, y - startY.current);
+    currentY.current = delta;
+    setTy(delta);
+  };
+  const end = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const shouldClose = currentY.current > 140; // threshold
+    if (shouldClose) {
+      // animate down
+      setTy(400);
+      setTimeout(onClose, 160);
+    } else {
+      // snap back
+      setTy(0);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* Dim */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      {/* Sheet */}
+      <div
+        ref={sheetRef}
+        className="absolute left-0 right-0 bottom-0 bg-white rounded-t-2xl shadow-2xl"
+        style={{
+          transform: `translateY(${ty}px)`,
+          transition: dragging.current ? "none" : "transform 160ms ease-out",
+        }}
+        // mouse
+        onMouseDown={(e) => begin(e.clientY)}
+        onMouseMove={(e) => move(e.clientY)}
+        onMouseUp={end}
+        onMouseLeave={end}
+        // touch
+        onTouchStart={(e) => begin(e.touches[0].clientY)}
+        onTouchMove={(e) => move(e.touches[0].clientY)}
+        onTouchEnd={end}
+      >
+        <div className="p-5 max-w-sm mx-auto">
+          <div className="h-1 w-10 bg-gray-300 rounded mx-auto mb-3" />
+          {title && <h2 className="text-lg font-semibold text-center mb-2">{title}</h2>}
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =============== Add / Edit forms =============== */
+function AddTaskForm({
+  title,
+  setTitle,
+  description,
+  setDescription,
+  date,
+  setDate,
+  time,
+  setTime,
+  priority,
+  setPriority,
+  onSubmit, // async -> returns true/false
+}) {
+  return (
+    <>
+      <input
+        className="w-full border p-2 rounded mb-3"
+        placeholder="Task Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <textarea
+        className="w-full border p-2 rounded mb-3"
+        placeholder="Description (optional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <div className="flex gap-3 mb-3">
+        <input
+          type="date"
+          className="w-1/2 border p-2 rounded"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+        <input
+          type="time"
+          className="w-1/2 border p-2 rounded"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+        />
+      </div>
+      <select
+        className="w-full border p-2 rounded mb-4"
+        value={priority}
+        onChange={(e) => setPriority(e.target.value)}
+      >
+        <option value="">Priority (optional)</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+
+      <button
+        className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
+        onClick={onSubmit}
+      >
+        Add
+      </button>
+      <p className="text-[11px] text-gray-500 text-center">
+        Tip: drag the sheet down to close.
+      </p>
+    </>
+  );
+}
+
+function EditTaskForm({ editingTask, setEditingTask, onSave }) {
+  const setField = (k) => (e) => setEditingTask((t) => ({ ...t, [k]: e.target.value }));
+  return (
+    <>
+      <input
+        className="w-full border p-2 rounded mb-3"
+        placeholder="Task Title"
+        value={editingTask.title || ""}
+        onChange={setField("title")}
+      />
+      <textarea
+        className="w-full border p-2 rounded mb-3"
+        placeholder="Description (optional)"
+        value={editingTask.description || ""}
+        onChange={setField("description")}
+      />
+      <div className="flex gap-3 mb-3">
+        <input
+          type="date"
+          className="w-1/2 border p-2 rounded"
+          value={dayjs(editingTask.dateTime).format("YYYY-MM-DD")}
+          onChange={(e) => {
+            const d = e.target.value;
+            const t = dayjs(editingTask.dateTime).format("HH:mm");
+            setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
+          }}
+        />
+        <input
+          type="time"
+          className="w-1/2 border p-2 rounded"
+          value={dayjs(editingTask.dateTime).format("HH:mm")}
+          onChange={(e) => {
+            const t = e.target.value;
+            const d = dayjs(editingTask.dateTime).format("YYYY-MM-DD");
+            setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
+          }}
+        />
+      </div>
+      <select
+        className="w-full border p-2 rounded mb-4"
+        value={editingTask.priority || ""}
+        onChange={setField("priority")}
+      >
+        <option value="">Priority (optional)</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+
+      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]" onClick={onSave}>
+        Save
+      </button>
+      <p className="text-[11px] text-gray-500 text-center">
+        Tip: drag the sheet down to close.
+      </p>
+    </>
+  );
+}
+
+/* =============== Main App =============== */
 export default function App() {
-  // Tabs: "home" (weekly) | "search"
+  // tabs
   const [tab, setTab] = useState("home");
 
-  // weekly summary object: { "YYYY-MM-DD(monday)": { open, completed, tasks: [...] } }
+  // weekly data: { "YYYY-MM-DD(Mon)": { open, completed, tasks:[...] } }
   const [weekly, setWeekly] = useState({});
   const [openWeek, setOpenWeek] = useState(null);
 
-  // Add modal state
-  const [showAddModal, setShowAddModal] = useState(false);
+  // add modal
+  const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState("");
 
-  // Edit modal state
-  const [showEditModal, setShowEditModal] = useState(false);
+  // edit modal
+  const [showEdit, setShowEdit] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // search states
+  // search
   const [searchText, setSearchText] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -216,11 +259,10 @@ export default function App() {
     }
   };
 
-  // return true on success, false on failure
   const addTask = async () => {
     if (!title || !date || !time) {
       alert("Title, Date & Time required");
-      return false;
+      return;
     }
     try {
       await axios.post("/tasks", {
@@ -230,20 +272,15 @@ export default function App() {
         status: "in-progress",
         dateTime: `${date}T${time}`,
       });
-      // clear
       setTitle("");
       setDescription("");
       setPriority("");
       setDate("");
       setTime("");
-      // refresh weekly view
       await fetchWeekly();
-      return true;
+      setShowAdd(false);
     } catch (err) {
-      const msg = err?.response?.data?.error || err.message || "Add failed";
-      alert(msg);
-      console.log("Add error:", err);
-      return false;
+      alert(err?.response?.data?.error || err.message || "Add failed");
     }
   };
 
@@ -274,7 +311,7 @@ export default function App() {
       ...task,
       dateTime: dayjs(task.dateTime).format("YYYY-MM-DDTHH:mm"),
     });
-    setShowEditModal(true);
+    setShowEdit(true);
   };
 
   const saveEdit = async () => {
@@ -287,24 +324,20 @@ export default function App() {
         status,
         dateTime,
       });
-      setShowEditModal(false);
+      setShowEdit(false);
       setEditingTask(null);
       fetchWeekly();
       if (tab === "search" && searchText.trim()) runSearch();
     } catch (err) {
-      const msg = err?.response?.data?.error || err.message || "Edit failed";
-      alert(msg);
-      console.log("Edit error:", err);
+      alert(err?.response?.data?.error || err.message || "Edit failed");
     }
   };
 
   const weekKeys = useMemo(
-    () =>
-      Object.keys(weekly).sort((a, b) => new Date(b) - new Date(a)), // latest week first
+    () => Object.keys(weekly).sort((a, b) => new Date(b) - new Date(a)),
     [weekly]
   );
 
-  /* ---------------- Search Tab handlers ---------------- */
   const runSearch = async () => {
     setSearchLoading(true);
     try {
@@ -319,17 +352,16 @@ export default function App() {
     }
   };
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="min-h-screen bg-white px-4 pt-6 pb-24 font-sans max-w-sm mx-auto">
-      {/* Top title */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold tracking-tight">
           {tab === "home" ? "Weekly Overview" : "Search Tasks"}
         </h1>
         {tab === "home" && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setShowAdd(true)}
             className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow active:scale-95"
             title="Add Task"
           >
@@ -338,7 +370,7 @@ export default function App() {
         )}
       </div>
 
-      {/* TAB CONTENT */}
+      {/* CONTENT */}
       {tab === "home" ? (
         <>
           {weekKeys.length === 0 && (
@@ -352,11 +384,9 @@ export default function App() {
               const data = weekly[week];
               const start = dayjs(week);
               const end = start.add(6, "day");
-
-              const [open, completed] = [data.open, data.completed];
-              const progress =
-                open + completed === 0 ? 0 : Math.round((completed / (open + completed)) * 100);
-
+              const open = data.open;
+              const completed = data.completed;
+              const progress = open + completed === 0 ? 0 : Math.round((completed / (open + completed)) * 100);
               const expanded = openWeek === week;
 
               return (
@@ -382,11 +412,12 @@ export default function App() {
                     </div>
                   </button>
 
-                  {/* Expanded list with animation */}
+                  {/* Animated expansion */}
                   <div
-                    className={`overflow-hidden transition-all duration-300 ease-out ${
+                    className={cn(
+                      "overflow-hidden transition-all duration-300 ease-out",
                       expanded ? "max-h-[1000px] opacity-100 mt-3" : "max-h-0 opacity-0"
-                    }`}
+                    )}
                   >
                     <ul className="space-y-3 pl-1">
                       {data.tasks.length === 0 && (
@@ -450,7 +481,7 @@ export default function App() {
           </div>
         </>
       ) : (
-        /* SEARCH TAB */
+        // SEARCH TAB
         <>
           <div className="flex gap-2 mb-4">
             <input
@@ -466,7 +497,6 @@ export default function App() {
           </div>
 
           {searchLoading && <p className="text-gray-400 text-sm">Searching…</p>}
-
           {!searchLoading && searchText.trim() && searchResults.length === 0 && (
             <div className="text-gray-400 text-sm py-8">No matching tasks.</div>
           )}
@@ -510,13 +540,13 @@ export default function App() {
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t">
         <div className="max-w-sm mx-auto flex">
           <button
-            className={`flex-1 py-3 text-sm ${tab === "home" ? "text-blue-600 font-medium" : "text-gray-500"}`}
+            className={cn("flex-1 py-3 text-sm", tab === "home" ? "text-blue-600 font-medium" : "text-gray-500")}
             onClick={() => setTab("home")}
           >
             Home
           </button>
-          <button
-            className={`flex-1 py-3 text-sm ${tab === "search" ? "text-blue-600 font-medium" : "text-gray-500"}`}
+        <button
+            className={cn("flex-1 py-3 text-sm", tab === "search" ? "text-blue-600 font-medium" : "text-gray-500")}
             onClick={() => setTab("search")}
           >
             Search
@@ -524,33 +554,39 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Modals */}
-      <AddTaskModal
-        show={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title={title}
-        setTitle={setTitle}
-        description={description}
-        setDescription={setDescription}
-        date={date}
-        setDate={setDate}
-        time={time}
-        setTime={setTime}
-        priority={priority}
-        setPriority={setPriority}
-        addTask={addTask}
-      />
+      {/* Sheets */}
+      <BottomSheet show={showAdd} onClose={() => setShowAdd(false)} title="Add Task">
+        <AddTaskForm
+          title={title}
+          setTitle={setTitle}
+          description={description}
+          setDescription={setDescription}
+          date={date}
+          setDate={setDate}
+          time={time}
+          setTime={setTime}
+          priority={priority}
+          setPriority={setPriority}
+          onSubmit={addTask}
+        />
+      </BottomSheet>
 
-      <EditTaskModal
-        show={showEditModal}
+      <BottomSheet
+        show={showEdit}
         onClose={() => {
-          setShowEditModal(false);
+          setShowEdit(false);
           setEditingTask(null);
         }}
-        editingTask={editingTask}
-        setEditingTask={setEditingTask}
-        onSave={saveEdit}
-      />
+        title="Edit Task"
+      >
+        {editingTask && (
+          <EditTaskForm
+            editingTask={editingTask}
+            setEditingTask={setEditingTask}
+            onSave={saveEdit}
+          />
+        )}
+      </BottomSheet>
     </div>
   );
 }
