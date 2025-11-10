@@ -92,17 +92,10 @@ function AddTaskModal({
 }
 
 /* ---------------- Bottom-sheet Edit Modal ---------------- */
-function EditTaskModal({
-  show,
-  onClose,
-  editingTask,
-  setEditingTask,
-  onSave,
-}) {
+function EditTaskModal({ show, onClose, editingTask, setEditingTask, onSave }) {
   if (!show || !editingTask) return null;
 
-  const setField = (k) => (e) =>
-    setEditingTask((t) => ({ ...t, [k]: e.target.value }));
+  const setField = (k) => (e) => setEditingTask((t) => ({ ...t, [k]: e.target.value }));
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-center items-end z-50">
@@ -158,23 +151,30 @@ function EditTaskModal({
           <option value="high">High</option>
         </select>
 
-        <button
-          className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
-          onClick={onSave}
-        >
+        <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]" onClick={onSave}>
           Save
         </button>
 
-        <button
-          className="w-full text-center text-gray-500 text-sm"
-          onClick={onClose}
-          type="button"
-        >
+        <button className="w-full text-center text-gray-500 text-sm" onClick={onClose} type="button">
           Cancel
         </button>
       </div>
     </div>
   );
+}
+
+/* ---------------- Helpers ---------------- */
+function PriorityDot({ priority }) {
+  const cls =
+    priority === "high"
+      ? "bg-red-500"
+      : priority === "medium"
+      ? "bg-yellow-500"
+      : priority === "low"
+      ? "bg-green-500"
+      : "bg-transparent";
+  if (!priority) return null;
+  return <span className={`inline-block w-2 h-2 rounded-full ${cls}`} aria-hidden="true" />;
 }
 
 /* ---------------- Main App ---------------- */
@@ -253,7 +253,6 @@ export default function App() {
         status: status === "completed" ? "in-progress" : "completed",
       });
       fetchWeekly();
-      // also re-run search if on search tab
       if (tab === "search" && searchText.trim()) runSearch();
     } catch (err) {
       console.log("Update error:", err?.response?.data || err.message);
@@ -301,21 +300,9 @@ export default function App() {
 
   const weekKeys = useMemo(
     () =>
-      Object.keys(weekly)
-        .sort((a, b) => new Date(b) - new Date(a)), // latest week first
+      Object.keys(weekly).sort((a, b) => new Date(b) - new Date(a)), // latest week first
     [weekly]
   );
-
-  const badge = (p) =>
-    p
-      ? `text-[10px] px-2 py-0.5 rounded ${
-          p === "high"
-            ? "bg-red-200 text-red-700"
-            : p === "medium"
-            ? "bg-yellow-200 text-yellow-700"
-            : "bg-green-200 text-green-700"
-        }`
-      : "";
 
   /* ---------------- Search Tab handlers ---------------- */
   const runSearch = async () => {
@@ -337,13 +324,13 @@ export default function App() {
     <div className="min-h-screen bg-white px-4 pt-6 pb-24 font-sans max-w-sm mx-auto">
       {/* Top title */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-xl font-semibold tracking-tight">
           {tab === "home" ? "Weekly Overview" : "Search Tasks"}
         </h1>
         {tab === "home" && (
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow"
+            className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow active:scale-95"
             title="Add Task"
           >
             +
@@ -354,14 +341,12 @@ export default function App() {
       {/* TAB CONTENT */}
       {tab === "home" ? (
         <>
-          {/* If no data */}
           {weekKeys.length === 0 && (
-            <p className="text-gray-400 text-sm">
-              No tasks yet. Tap + to create your first task.
-            </p>
+            <div className="text-center text-gray-400 text-sm py-12">
+              No tasks yet. Tap <span className="font-semibold">+</span> to add your first task.
+            </div>
           )}
 
-          {/* Weekly cards */}
           <div className="space-y-4">
             {weekKeys.map((week) => {
               const data = weekly[week];
@@ -370,74 +355,65 @@ export default function App() {
 
               const [open, completed] = [data.open, data.completed];
               const progress =
-                open + completed === 0
-                  ? 0
-                  : Math.round((completed / (open + completed)) * 100);
+                open + completed === 0 ? 0 : Math.round((completed / (open + completed)) * 100);
 
-              // tasks inside the card
-              const tasksFiltered = data.tasks;
+              const expanded = openWeek === week;
 
               return (
-                <div key={week}>
+                <div key={week} className="transition">
                   {/* Week card */}
-                  <div
-                    className="bg-white shadow rounded-2xl p-4 cursor-pointer border active:scale-[.995]"
-                    onClick={() => setOpenWeek(openWeek === week ? null : week)}
+                  <button
+                    className="w-full bg-white shadow rounded-2xl p-4 border text-left active:scale-[.995] transition"
+                    onClick={() => setOpenWeek(expanded ? null : week)}
                   >
                     <div className="flex items-center justify-between">
                       <p className="font-semibold">
                         {start.format("MMM D")} → {end.format("MMM D")}
                       </p>
-                      <span className="text-xs text-gray-500">
-                        {openWeek === week ? "Hide" : "Show"}
-                      </span>
+                      <span className="text-xs text-gray-500">{expanded ? "Hide" : "Show"}</span>
                     </div>
 
                     <p className="text-sm mt-2">
                       🔵 {open} Open &nbsp;&nbsp; ✅ {completed} Done
                     </p>
 
-                    {/* progress bar */}
                     <div className="mt-3 w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
+                      <div className="h-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
                     </div>
-                  </div>
+                  </button>
 
-                  {/* Expanded task list */}
-                  {openWeek === week && (
-                    <ul className="mt-3 space-y-3 pl-1">
-                      {tasksFiltered.map((task) => (
+                  {/* Expanded list with animation */}
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ease-out ${
+                      expanded ? "max-h-[1000px] opacity-100 mt-3" : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    <ul className="space-y-3 pl-1">
+                      {data.tasks.length === 0 && (
+                        <li className="text-xs text-gray-400 pl-1 py-2">No tasks in this week.</li>
+                      )}
+
+                      {data.tasks.map((task) => (
                         <li
                           key={task._id}
                           className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
                         >
                           <div className="pr-3">
                             <div className="flex items-center gap-2">
+                              <PriorityDot priority={task.priority} />
                               <p
                                 className={`text-sm ${
-                                  task.status === "completed"
-                                    ? "line-through text-gray-400"
-                                    : ""
+                                  task.status === "completed" ? "line-through text-gray-400" : ""
                                 }`}
                               >
                                 {task.title}
                               </p>
-                              {task.priority && (
-                                <span className={badge(task.priority)}>
-                                  {task.priority}
-                                </span>
-                              )}
                             </div>
                             <p className="text-[11px] text-gray-500">
                               {dayjs(task.dateTime).format("MMM D, h:mm A")}
                             </p>
                             {task.description && (
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                {task.description}
-                              </p>
+                              <p className="text-[11px] text-gray-500 mt-0.5">{task.description}</p>
                             )}
                           </div>
 
@@ -466,13 +442,8 @@ export default function App() {
                           </div>
                         </li>
                       ))}
-                      {tasksFiltered.length === 0 && (
-                        <li className="text-xs text-gray-400 pl-1">
-                          No tasks in this week.
-                        </li>
-                      )}
                     </ul>
-                  )}
+                  </div>
                 </div>
               );
             })}
@@ -489,10 +460,7 @@ export default function App() {
               onChange={(e) => setSearchText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
             />
-            <button
-              onClick={runSearch}
-              className="bg-blue-600 text-white px-4 rounded-lg text-sm"
-            >
+            <button onClick={runSearch} className="bg-blue-600 text-white px-4 rounded-lg text-sm active:scale-95">
               Search
             </button>
           </div>
@@ -500,46 +468,21 @@ export default function App() {
           {searchLoading && <p className="text-gray-400 text-sm">Searching…</p>}
 
           {!searchLoading && searchText.trim() && searchResults.length === 0 && (
-            <p className="text-gray-400 text-sm">No matching tasks.</p>
+            <div className="text-gray-400 text-sm py-8">No matching tasks.</div>
           )}
 
           <ul className="space-y-3">
             {searchResults.map((task) => (
-              <li
-                key={task._id}
-                className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
-              >
+              <li key={task._id} className="border rounded-xl p-3 flex justify-between items-center bg-gray-50">
                 <div className="pr-3">
                   <div className="flex items-center gap-2">
-                    <p
-                      className={`text-sm ${
-                        task.status === "completed" ? "line-through text-gray-400" : ""
-                      }`}
-                    >
+                    <PriorityDot priority={task.priority} />
+                    <p className={`text-sm ${task.status === "completed" ? "line-through text-gray-400" : ""}`}>
                       {task.title}
                     </p>
-                    {task.priority && (
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded ${
-                          task.priority === "high"
-                            ? "bg-red-200 text-red-700"
-                            : task.priority === "medium"
-                            ? "bg-yellow-200 text-yellow-700"
-                            : "bg-green-200 text-green-700"
-                        }`}
-                      >
-                        {task.priority}
-                      </span>
-                    )}
                   </div>
-                  <p className="text-[11px] text-gray-500">
-                    {dayjs(task.dateTime).format("MMM D, h:mm A")}
-                  </p>
-                  {task.description && (
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {task.description}
-                    </p>
-                  )}
+                  <p className="text-[11px] text-gray-500">{dayjs(task.dateTime).format("MMM D, h:mm A")}</p>
+                  {task.description && <p className="text-[11px] text-gray-500 mt-0.5">{task.description}</p>}
                 </div>
 
                 <div className="flex gap-3 items-center">
@@ -550,18 +493,10 @@ export default function App() {
                   >
                     ✓
                   </button>
-                  <button
-                    className="text-gray-600 text-lg"
-                    onClick={() => startEdit(task)}
-                    title="Edit task"
-                  >
+                  <button className="text-gray-600 text-lg" onClick={() => startEdit(task)} title="Edit task">
                     ✎
                   </button>
-                  <button
-                    className="text-red-600 text-lg"
-                    onClick={() => deleteTask(task._id)}
-                    title="Delete task"
-                  >
+                  <button className="text-red-600 text-lg" onClick={() => deleteTask(task._id)} title="Delete task">
                     ✕
                   </button>
                 </div>
