@@ -2,18 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global App Background */
-html, body {
-  background: #ffffff;
-  min-height: 100%;
-  font-family: system-ui, sans-serif;
+/* App base */
+html, body, #root {
+  height: 100%;
 }
-/* ===== Scrollbar Hide (for WeekStrip & mobile UI) ===== */
+
+body {
+  background: white;
+  color: #0f172a; /* slate-900 */
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Hide horizontal scrollbar (WeekStrip) */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE + Edge */
-  scrollbar-width: none;    /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

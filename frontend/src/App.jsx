@@ -3,12 +3,12 @@ import axios from "axios";
 import dayjs from "dayjs";
 import WeekStrip from "./components/WeekStrip";
 
-// -------------- API base (env-aware) --------------
+// -------- API base (env-aware) --------
 const API_BASE =
   import.meta.env.VITE_API_URL || "https://todo-mern-8685.onrender.com/api";
 axios.defaults.baseURL = API_BASE;
 
-/* ================= Helpers ================= */
+/* ========== Helpers ========== */
 function PriorityDot({ priority }) {
   const cls =
     priority === "high"
@@ -24,8 +24,15 @@ function PriorityDot({ priority }) {
 function cn(...a) {
   return a.filter(Boolean).join(" ");
 }
+function debounce(fn, ms = 300) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
 
-/* ============ iOS-like Bottom Sheet ============ */
+/* ===== iOS-like Bottom Sheet (drag to close) ===== */
 function BottomSheet({ show, onClose, children, title = "" }) {
   const startY = useRef(0);
   const curY = useRef(0);
@@ -84,7 +91,7 @@ function BottomSheet({ show, onClose, children, title = "" }) {
   );
 }
 
-/* ================== Forms ================== */
+/* ========== Forms ========== */
 function AddTaskForm({
   title,
   setTitle,
@@ -137,7 +144,11 @@ function AddTaskForm({
         <option value="high">High</option>
       </select>
 
-      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2" onClick={onSubmit}>
+      <button
+        aria-label="Add task"
+        className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 transition active:scale-95"
+        onClick={onSubmit}
+      >
         Add
       </button>
       <p className="text-[11px] text-gray-500 text-center">Drag down to close.</p>
@@ -194,7 +205,11 @@ function EditTaskForm({ editingTask, setEditingTask, onSave }) {
         <option value="high">High</option>
       </select>
 
-      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2" onClick={onSave}>
+      <button
+        aria-label="Save task"
+        className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 transition active:scale-95"
+        onClick={onSave}
+      >
         Save
       </button>
       <p className="text-[11px] text-gray-500 text-center">Drag down to close.</p>
@@ -202,12 +217,13 @@ function EditTaskForm({ editingTask, setEditingTask, onSave }) {
   );
 }
 
-/* ================== App ================== */
+/* ========== App ========== */
 export default function App() {
   const [tab, setTab] = useState("home");
 
   const [weekly, setWeekly] = useState({});
   const [openWeek, setOpenWeek] = useState(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
 
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState("");
@@ -228,6 +244,7 @@ export default function App() {
   }, []);
 
   const fetchWeekly = async () => {
+    setWeeklyLoading(true);
     try {
       const res = await axios.get("/weekly-summary");
       const data = res.data || {};
@@ -244,6 +261,8 @@ export default function App() {
       }
     } catch (err) {
       console.log("Fetch weekly failed:", err?.response?.data || err.message);
+    } finally {
+      setWeeklyLoading(false);
     }
   };
 
@@ -336,6 +355,7 @@ export default function App() {
       setSearchLoading(false);
     }
   };
+  const debouncedSearch = useMemo(() => debounce(() => runSearch(), 350), [searchText]);
 
   return (
     <div className="min-h-screen bg-white px-4 pt-6 pb-24 font-sans max-w-sm mx-auto">
@@ -346,8 +366,9 @@ export default function App() {
         </h1>
         {tab === "home" && (
           <button
+            aria-label="Add task"
             onClick={() => setShowAdd(true)}
-            className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow active:scale-95"
+            className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow transition active:scale-95"
             title="Add Task"
           >
             +
@@ -366,7 +387,18 @@ export default function App() {
             setOpenWeek={setOpenWeek}
           />
 
-          {weekKeys.length === 0 && (
+          {weeklyLoading && (
+            <div className="space-y-3 animate-pulse">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="bg-gray-100 border rounded-2xl p-4">
+                  <div className="h-4 w-40 bg-gray-200 rounded mb-2" />
+                  <div className="h-2 w-full bg-gray-200 rounded" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!weeklyLoading && weekKeys.length === 0 && (
             <div className="text-center text-gray-400 text-sm py-12">
               No tasks yet. Tap <span className="font-semibold">+</span> to add your first task.
             </div>
@@ -386,7 +418,7 @@ export default function App() {
               return (
                 <div key={week} className="transition">
                   <button
-                    className="w-full bg-white shadow rounded-2xl p-4 border text-left active:scale-[.995] transition"
+                    className="w-full bg-white shadow rounded-2xl p-4 border text-left transition hover:shadow-md active:scale-[.995]"
                     onClick={() => setOpenWeek(expanded ? null : week)}
                   >
                     <div className="flex items-center justify-between">
@@ -413,7 +445,9 @@ export default function App() {
                   >
                     <ul className="space-y-3 pl-1">
                       {(!data || data.tasks.length === 0) && (
-                        <li className="text-xs text-gray-400 pl-1 py-2">No tasks in this week.</li>
+                        <li className="p-4 text-center text-sm text-gray-500 bg-gray-50 rounded-xl">
+                          No tasks in this week. Tap <span className="font-semibold">+</span> to add one.
+                        </li>
                       )}
 
                       {data?.tasks.map((task) => (
@@ -442,21 +476,24 @@ export default function App() {
 
                           <div className="flex gap-3 items-center">
                             <button
-                              className="text-green-600 text-lg"
+                              aria-label="Toggle complete"
+                              className="text-green-600 text-lg transition active:scale-95"
                               onClick={() => toggleComplete(task._id, task.status)}
                               title="Toggle complete"
                             >
                               ✓
                             </button>
                             <button
-                              className="text-gray-600 text-lg"
+                              aria-label="Edit task"
+                              className="text-gray-600 text-lg transition active:scale-95"
                               onClick={() => startEdit(task)}
                               title="Edit task"
                             >
                               ✎
                             </button>
                             <button
-                              className="text-red-600 text-lg"
+                              aria-label="Delete task"
+                              className="text-red-600 text-lg transition active:scale-95"
                               onClick={() => deleteTask(task._id)}
                               title="Delete task"
                             >
@@ -480,10 +517,16 @@ export default function App() {
               className="flex-1 bg-gray-100 px-4 py-2 rounded-lg text-sm outline-none"
               placeholder="Search by title or description"
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                debouncedSearch();
+              }}
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
             />
-            <button onClick={runSearch} className="bg-blue-600 text-white px-4 rounded-lg text-sm active:scale-95">
+            <button
+              className="bg-blue-600 text-white px-4 rounded-lg text-sm transition active:scale-95"
+              onClick={runSearch}
+            >
               Search
             </button>
           </div>
@@ -509,16 +552,27 @@ export default function App() {
 
                 <div className="flex gap-3 items-center">
                   <button
-                    className="text-green-600 text-lg"
+                    aria-label="Toggle complete"
+                    className="text-green-600 text-lg transition active:scale-95"
                     onClick={() => toggleComplete(task._id, task.status)}
                     title="Toggle complete"
                   >
                     ✓
                   </button>
-                  <button className="text-gray-600 text-lg" onClick={() => startEdit(task)} title="Edit task">
+                  <button
+                    aria-label="Edit task"
+                    className="text-gray-600 text-lg transition active:scale-95"
+                    onClick={() => startEdit(task)}
+                    title="Edit task"
+                  >
                     ✎
                   </button>
-                  <button className="text-red-600 text-lg" onClick={() => deleteTask(task._id)} title="Delete task">
+                  <button
+                    aria-label="Delete task"
+                    className="text-red-600 text-lg transition active:scale-95"
+                    onClick={() => deleteTask(task._id)}
+                    title="Delete task"
+                  >
                     ✕
                   </button>
                 </div>
