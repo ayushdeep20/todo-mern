@@ -2,13 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 import WeekStrip from "./components/WeekStrip";
+import Onboarding from "./components/Onboarding";
 
-// -------- API base (env-aware) --------
+/* ================= API base (env-aware) ================= */
 const API_BASE =
   import.meta.env.VITE_API_URL || "https://todo-mern-8685.onrender.com/api";
 axios.defaults.baseURL = API_BASE;
 
-/* ========== Helpers ========== */
+/* ================= Tiny Splash to avoid white flash ================= */
+function Splash() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="animate-pulse text-gray-500 text-sm">Loading…</div>
+    </div>
+  );
+}
+
+/* ================= Helpers ================= */
 function PriorityDot({ priority }) {
   const cls =
     priority === "high"
@@ -32,7 +42,7 @@ function debounce(fn, ms = 300) {
   };
 }
 
-/* ===== iOS-like Bottom Sheet (drag to close) ===== */
+/* ================= Bottom Sheet (drag to close) ================= */
 function BottomSheet({ show, onClose, children, title = "" }) {
   const startY = useRef(0);
   const curY = useRef(0);
@@ -91,7 +101,7 @@ function BottomSheet({ show, onClose, children, title = "" }) {
   );
 }
 
-/* ========== Forms ========== */
+/* ================= Forms ================= */
 function AddTaskForm({
   title,
   setTitle,
@@ -149,7 +159,7 @@ function AddTaskForm({
         className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 transition active:scale-95"
         onClick={onSubmit}
       >
-        Add
+        Create task
       </button>
       <p className="text-[11px] text-gray-500 text-center">Drag down to close.</p>
     </>
@@ -217,8 +227,26 @@ function EditTaskForm({ editingTask, setEditingTask, onSave }) {
   );
 }
 
-/* ========== App ========== */
+/* ================= App ================= */
 export default function App() {
+  /* Onboarding gate: first-time screen */
+  const [onboarded, setOnboarded] = useState(
+    () => localStorage.getItem("onboarded") === "1"
+  );
+  if (!onboarded) {
+    return (
+      <Onboarding
+        onStart={() => {
+          localStorage.setItem("onboarded", "1");
+          setOnboarded(true);
+        }}
+      />
+    );
+  }
+
+  /* Boot splash to hide blank while first fetch happens */
+  const [booting, setBooting] = useState(true);
+
   const [tab, setTab] = useState("home");
 
   const [weekly, setWeekly] = useState({});
@@ -239,8 +267,13 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  /* Load weekly on start */
   useEffect(() => {
-    fetchWeekly();
+    (async () => {
+      await fetchWeekly();
+      setBooting(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchWeekly = async () => {
@@ -250,7 +283,6 @@ export default function App() {
       const data = res.data || {};
       setWeekly(data);
 
-      // auto-select current Monday if present; else latest week
       const mondayKey = dayjs().startOf("week").add(1, "day").format("YYYY-MM-DD");
       if (!openWeek) {
         if (data[mondayKey]) setOpenWeek(mondayKey);
@@ -357,18 +389,21 @@ export default function App() {
   };
   const debouncedSearch = useMemo(() => debounce(() => runSearch(), 350), [searchText]);
 
+  /* Show splash while first weekly load completes */
+  if (booting) return <Splash />;
+
   return (
     <div className="min-h-screen bg-white px-4 pt-6 pb-24 font-sans max-w-sm mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold tracking-tight">
-          {tab === "home" ? "Weekly Overview" : "Search Tasks"}
+          {tab === "home" ? "Weekly Progress" : "Search Tasks"}
         </h1>
         {tab === "home" && (
           <button
             aria-label="Add task"
             onClick={() => setShowAdd(true)}
-            className="bg-blue-600 text-white rounded-full w-10 h-10 text-2xl leading-[40px] text-center shadow transition active:scale-95"
+            className="bg-blue-600 text-white rounded-full w-12 h-12 text-3xl leading-[48px] text-center shadow transition active:scale-95"
             title="Add Task"
           >
             +
@@ -446,7 +481,8 @@ export default function App() {
                     <ul className="space-y-3 pl-1">
                       {(!data || data.tasks.length === 0) && (
                         <li className="p-4 text-center text-sm text-gray-500 bg-gray-50 rounded-xl">
-                          No tasks in this week. Tap <span className="font-semibold">+</span> to add one.
+                          No tasks in this week. Tap <span className="font-semibold">+</span> to add
+                          one.
                         </li>
                       )}
 
@@ -460,7 +496,9 @@ export default function App() {
                               <PriorityDot priority={task.priority} />
                               <p
                                 className={`text-sm ${
-                                  task.status === "completed" ? "line-through text-gray-400" : ""
+                                  task.status === "completed"
+                                    ? "line-through text-gray-400"
+                                    : ""
                                 }`}
                               >
                                 {task.title}
@@ -470,7 +508,9 @@ export default function App() {
                               {dayjs(task.dateTime).format("MMM D, h:mm A")}
                             </p>
                             {task.description && (
-                              <p className="text-[11px] text-gray-500 mt-0.5">{task.description}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {task.description}
+                              </p>
                             )}
                           </div>
 
@@ -538,16 +578,27 @@ export default function App() {
 
           <ul className="space-y-3">
             {searchResults.map((task) => (
-              <li key={task._id} className="border rounded-xl p-3 flex justify-between items-center bg-gray-50">
+              <li
+                key={task._id}
+                className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
+              >
                 <div className="pr-3">
                   <div className="flex items-center gap-2">
                     <PriorityDot priority={task.priority} />
-                    <p className={`text-sm ${task.status === "completed" ? "line-through text-gray-400" : ""}`}>
+                    <p
+                      className={`text-sm ${
+                        task.status === "completed" ? "line-through text-gray-400" : ""
+                      }`}
+                    >
                       {task.title}
                     </p>
                   </div>
-                  <p className="text-[11px] text-gray-500">{dayjs(task.dateTime).format("MMM D, h:mm A")}</p>
-                  {task.description && <p className="text-[11px] text-gray-500 mt-0.5">{task.description}</p>}
+                  <p className="text-[11px] text-gray-500">
+                    {dayjs(task.dateTime).format("MMM D, h:mm A")}
+                  </p>
+                  {task.description && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">{task.description}</p>
+                  )}
                 </div>
 
                 <div className="flex gap-3 items-center">
@@ -586,13 +637,19 @@ export default function App() {
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t">
         <div className="max-w-sm mx-auto flex">
           <button
-            className={cn("flex-1 py-3 text-sm", tab === "home" ? "text-blue-600 font-medium" : "text-gray-500")}
+            className={cn(
+              "flex-1 py-3 text-sm",
+              tab === "home" ? "text-blue-600 font-medium" : "text-gray-500"
+            )}
             onClick={() => setTab("home")}
           >
             Home
           </button>
           <button
-            className={cn("flex-1 py-3 text-sm", tab === "search" ? "text-blue-600 font-medium" : "text-gray-500")}
+            className={cn(
+              "flex-1 py-3 text-sm",
+              tab === "search" ? "text-blue-600 font-medium" : "text-gray-500"
+            )}
             onClick={() => setTab("search")}
           >
             Search
@@ -601,7 +658,7 @@ export default function App() {
       </nav>
 
       {/* Sheets */}
-      <BottomSheet show={showAdd} onClose={() => setShowAdd(false)} title="Add Task">
+      <BottomSheet show={showAdd} onClose={() => setShowAdd(false)} title="Add New Task">
         <AddTaskForm
           title={title}
           setTitle={setTitle}
@@ -626,7 +683,11 @@ export default function App() {
         title="Edit Task"
       >
         {editingTask && (
-          <EditTaskForm editingTask={editingTask} setEditingTask={setEditingTask} onSave={saveEdit} />
+          <EditTaskForm
+            editingTask={editingTask}
+            setEditingTask={setEditingTask}
+            onSave={saveEdit}
+          />
         )}
       </BottomSheet>
     </div>
