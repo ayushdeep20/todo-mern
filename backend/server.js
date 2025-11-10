@@ -6,12 +6,15 @@ require('dotenv').config();
 const app = express();
 app.use(cors({
   origin: [
-    "https://todomernlast.netlify.app",  // your deployed frontend
-    "http://localhost:5173"              // so local doesn’t break again
+    "http://localhost:5173",
+    "https://todo-mern-orcin-nine.vercel.app",   // ✅ Vercel frontend
+    "https://todomernlast.netlify.app"           // (old one, keep if needed)
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
+
+
 
 
 app.use(express.json());
