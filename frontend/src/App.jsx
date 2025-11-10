@@ -3,7 +3,11 @@ import axios from "axios";
 import dayjs from "dayjs";
 
 // ---------------- API base ----------------
-axios.defaults.baseURL = "https://todo-mern-8685.onrender.com/api";
+// Backend API base (Render / Environment Aware)
+const API_BASE =
+  import.meta.env.VITE_API_URL || "https://todo-mern-8685.onrender.com/api";
+axios.defaults.baseURL = API_BASE;
+
 
 /* =============== Tiny helpers =============== */
 function PriorityDot({ priority }) {
