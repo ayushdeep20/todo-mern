@@ -8,3 +8,12 @@ html, body {
   min-height: 100%;
   font-family: system-ui, sans-serif;
 }
+/* ===== Scrollbar Hide (for WeekStrip & mobile UI) ===== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE + Edge */
+  scrollbar-width: none;    /* Firefox */
+}

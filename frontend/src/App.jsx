@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
+import WeekStrip from "./components/WeekStrip";
 
-// ---------------- API base ----------------
-// Backend API base (Render / Environment Aware)
+// -------------- API base (env-aware) --------------
 const API_BASE =
   import.meta.env.VITE_API_URL || "https://todo-mern-8685.onrender.com/api";
 axios.defaults.baseURL = API_BASE;
 
-
-/* =============== Tiny helpers =============== */
+/* ================= Helpers ================= */
 function PriorityDot({ priority }) {
   const cls =
     priority === "high"
@@ -20,21 +19,17 @@ function PriorityDot({ priority }) {
       ? "bg-green-500"
       : "bg-transparent";
   if (!priority) return null;
-  return <span className={`inline-block w-2 h-2 rounded-full ${cls}`} aria-hidden="true" />;
+  return <span className={`inline-block w-2 h-2 rounded-full ${cls}`} />;
 }
-
 function cn(...a) {
   return a.filter(Boolean).join(" ");
 }
 
-/* =============== iOS-style Bottom Sheet (no deps) =============== */
+/* ============ iOS-like Bottom Sheet ============ */
 function BottomSheet({ show, onClose, children, title = "" }) {
-  const sheetRef = useRef(null);
   const startY = useRef(0);
-  const currentY = useRef(0);
+  const curY = useRef(0);
   const dragging = useRef(false);
-
-  // translateY in px
   const [ty, setTy] = useState(0);
 
   useEffect(() => {
@@ -48,43 +43,33 @@ function BottomSheet({ show, onClose, children, title = "" }) {
   const move = (y) => {
     if (!dragging.current) return;
     const delta = Math.max(0, y - startY.current);
-    currentY.current = delta;
+    curY.current = delta;
     setTy(delta);
   };
   const end = () => {
     if (!dragging.current) return;
     dragging.current = false;
-    const shouldClose = currentY.current > 140; // threshold
-    if (shouldClose) {
-      // animate down
+    if (curY.current > 140) {
       setTy(400);
       setTimeout(onClose, 160);
-    } else {
-      // snap back
-      setTy(0);
-    }
+    } else setTy(0);
   };
 
   if (!show) return null;
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* Dim */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      {/* Sheet */}
       <div
-        ref={sheetRef}
         className="absolute left-0 right-0 bottom-0 bg-white rounded-t-2xl shadow-2xl"
         style={{
           transform: `translateY(${ty}px)`,
           transition: dragging.current ? "none" : "transform 160ms ease-out",
         }}
-        // mouse
         onMouseDown={(e) => begin(e.clientY)}
         onMouseMove={(e) => move(e.clientY)}
         onMouseUp={end}
         onMouseLeave={end}
-        // touch
         onTouchStart={(e) => begin(e.touches[0].clientY)}
         onTouchMove={(e) => move(e.touches[0].clientY)}
         onTouchEnd={end}
@@ -99,7 +84,7 @@ function BottomSheet({ show, onClose, children, title = "" }) {
   );
 }
 
-/* =============== Add / Edit forms =============== */
+/* ================== Forms ================== */
 function AddTaskForm({
   title,
   setTitle,
@@ -111,7 +96,7 @@ function AddTaskForm({
   setTime,
   priority,
   setPriority,
-  onSubmit, // async -> returns true/false
+  onSubmit,
 }) {
   return (
     <>
@@ -152,15 +137,10 @@ function AddTaskForm({
         <option value="high">High</option>
       </select>
 
-      <button
-        className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
-        onClick={onSubmit}
-      >
+      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2" onClick={onSubmit}>
         Add
       </button>
-      <p className="text-[11px] text-gray-500 text-center">
-        Tip: drag the sheet down to close.
-      </p>
+      <p className="text-[11px] text-gray-500 text-center">Drag down to close.</p>
     </>
   );
 }
@@ -214,26 +194,21 @@ function EditTaskForm({ editingTask, setEditingTask, onSave }) {
         <option value="high">High</option>
       </select>
 
-      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]" onClick={onSave}>
+      <button className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2" onClick={onSave}>
         Save
       </button>
-      <p className="text-[11px] text-gray-500 text-center">
-        Tip: drag the sheet down to close.
-      </p>
+      <p className="text-[11px] text-gray-500 text-center">Drag down to close.</p>
     </>
   );
 }
 
-/* =============== Main App =============== */
+/* ================== App ================== */
 export default function App() {
-  // tabs
   const [tab, setTab] = useState("home");
 
-  // weekly data: { "YYYY-MM-DD(Mon)": { open, completed, tasks:[...] } }
   const [weekly, setWeekly] = useState({});
   const [openWeek, setOpenWeek] = useState(null);
 
-  // add modal
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -241,11 +216,9 @@ export default function App() {
   const [time, setTime] = useState("");
   const [priority, setPriority] = useState("");
 
-  // edit modal
   const [showEdit, setShowEdit] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
-  // search
   const [searchText, setSearchText] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -257,17 +230,25 @@ export default function App() {
   const fetchWeekly = async () => {
     try {
       const res = await axios.get("/weekly-summary");
-      setWeekly(res.data || {});
+      const data = res.data || {};
+      setWeekly(data);
+
+      // auto-select current Monday if present; else latest week
+      const mondayKey = dayjs().startOf("week").add(1, "day").format("YYYY-MM-DD");
+      if (!openWeek) {
+        if (data[mondayKey]) setOpenWeek(mondayKey);
+        else {
+          const keys = Object.keys(data).sort((a, b) => new Date(b) - new Date(a));
+          if (keys.length) setOpenWeek(keys[0]);
+        }
+      }
     } catch (err) {
       console.log("Fetch weekly failed:", err?.response?.data || err.message);
     }
   };
 
   const addTask = async () => {
-    if (!title || !date || !time) {
-      alert("Title, Date & Time required");
-      return;
-    }
+    if (!title || !date || !time) return alert("Title, Date & Time required");
     try {
       await axios.post("/tasks", {
         title,
@@ -377,6 +358,14 @@ export default function App() {
       {/* CONTENT */}
       {tab === "home" ? (
         <>
+          {/* Week strip selector */}
+          <WeekStrip
+            weekKeys={weekKeys}
+            weekly={weekly}
+            openWeek={openWeek}
+            setOpenWeek={setOpenWeek}
+          />
+
           {weekKeys.length === 0 && (
             <div className="text-center text-gray-400 text-sm py-12">
               No tasks yet. Tap <span className="font-semibold">+</span> to add your first task.
@@ -388,14 +377,14 @@ export default function App() {
               const data = weekly[week];
               const start = dayjs(week);
               const end = start.add(6, "day");
-              const open = data.open;
-              const completed = data.completed;
-              const progress = open + completed === 0 ? 0 : Math.round((completed / (open + completed)) * 100);
+              const open = data?.open ?? 0;
+              const completed = data?.completed ?? 0;
+              const progress =
+                open + completed === 0 ? 0 : Math.round((completed / (open + completed)) * 100);
               const expanded = openWeek === week;
 
               return (
                 <div key={week} className="transition">
-                  {/* Week card */}
                   <button
                     className="w-full bg-white shadow rounded-2xl p-4 border text-left active:scale-[.995] transition"
                     onClick={() => setOpenWeek(expanded ? null : week)}
@@ -416,7 +405,6 @@ export default function App() {
                     </div>
                   </button>
 
-                  {/* Animated expansion */}
                   <div
                     className={cn(
                       "overflow-hidden transition-all duration-300 ease-out",
@@ -424,11 +412,11 @@ export default function App() {
                     )}
                   >
                     <ul className="space-y-3 pl-1">
-                      {data.tasks.length === 0 && (
+                      {(!data || data.tasks.length === 0) && (
                         <li className="text-xs text-gray-400 pl-1 py-2">No tasks in this week.</li>
                       )}
 
-                      {data.tasks.map((task) => (
+                      {data?.tasks.map((task) => (
                         <li
                           key={task._id}
                           className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
@@ -549,7 +537,7 @@ export default function App() {
           >
             Home
           </button>
-        <button
+          <button
             className={cn("flex-1 py-3 text-sm", tab === "search" ? "text-blue-600 font-medium" : "text-gray-500")}
             onClick={() => setTab("search")}
           >
@@ -584,11 +572,7 @@ export default function App() {
         title="Edit Task"
       >
         {editingTask && (
-          <EditTaskForm
-            editingTask={editingTask}
-            setEditingTask={setEditingTask}
-            onSave={saveEdit}
-          />
+          <EditTaskForm editingTask={editingTask} setEditingTask={setEditingTask} onSave={saveEdit} />
         )}
       </BottomSheet>
     </div>
