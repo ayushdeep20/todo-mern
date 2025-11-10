@@ -19,7 +19,7 @@ function AddTaskModal({
   setTime,
   priority,
   setPriority,
-  addTask,
+  addTask, // must return true/false
 }) {
   if (!show) return null;
 
@@ -71,9 +71,9 @@ function AddTaskModal({
 
         <button
           className="w-full bg-blue-600 text-white p-2 rounded-lg mb-2 active:scale-[.99]"
-          onClick={() => {
-            addTask();
-            onClose();
+          onClick={async () => {
+            const ok = await addTask(); // only close if success
+            if (ok) onClose();
           }}
         >
           Add
@@ -132,7 +132,7 @@ function EditTaskModal({
             onChange={(e) => {
               const d = e.target.value;
               const t = dayjs(editingTask.dateTime).format("HH:mm");
-              setEditingTask((cur) => ({ ...cur, dateTime: new Date(`${d}T${t}`) }));
+              setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
             }}
           />
           <input
@@ -142,7 +142,7 @@ function EditTaskModal({
             onChange={(e) => {
               const t = e.target.value;
               const d = dayjs(editingTask.dateTime).format("YYYY-MM-DD");
-              setEditingTask((cur) => ({ ...cur, dateTime: new Date(`${d}T${t}`) }));
+              setEditingTask((cur) => ({ ...cur, dateTime: `${d}T${t}` }));
             }}
           />
         </div>
@@ -211,10 +211,11 @@ export default function App() {
     }
   };
 
+  // return true on success, false on failure
   const addTask = async () => {
     if (!title || !date || !time) {
       alert("Title, Date & Time required");
-      return;
+      return false;
     }
     try {
       await axios.post("/tasks", {
@@ -222,7 +223,8 @@ export default function App() {
         description,
         priority: priority || undefined,
         status: "in-progress",
-        dateTime: new Date(`${date}T${time}`),
+        // send as string to avoid timezone serialization weirdness
+        dateTime: `${date}T${time}`,
       });
       // clear
       setTitle("");
@@ -231,9 +233,13 @@ export default function App() {
       setDate("");
       setTime("");
       // refresh weekly view
-      fetchWeekly();
+      await fetchWeekly();
+      return true;
     } catch (err) {
-      console.log("Add error:", err?.response?.data || err.message);
+      const msg = err?.response?.data?.error || err.message || "Add failed";
+      alert(msg);
+      console.log("Add error:", err);
+      return false;
     }
   };
 
@@ -260,8 +266,7 @@ export default function App() {
   const startEdit = (task) => {
     setEditingTask({
       ...task,
-      // normalize dateTime into a real Date for inputs
-      dateTime: new Date(task.dateTime),
+      dateTime: dayjs(task.dateTime).format("YYYY-MM-DDTHH:mm"),
     });
     setShowEditModal(true);
   };
@@ -274,13 +279,15 @@ export default function App() {
         description,
         priority: priority || undefined,
         status,
-        dateTime,
+        dateTime, // already "YYYY-MM-DDTHH:mm"
       });
       setShowEditModal(false);
       setEditingTask(null);
       fetchWeekly();
     } catch (err) {
-      console.log("Edit error:", err?.response?.data || err.message);
+      const msg = err?.response?.data?.error || err.message || "Edit failed";
+      alert(msg);
+      console.log("Edit error:", err);
     }
   };
 
